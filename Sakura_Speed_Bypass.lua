@@ -211,12 +211,24 @@ end
 local function makeDraggable(handle, target)
     local dragging, dragStart, startPos = false, nil, nil
     handle.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = target.Position
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then
+            return
         end
+        -- Don't start drag when pressing buttons inside the handle
+        local pos = input.Position
+        for _, child in ipairs(handle:GetDescendants()) do
+            if child:IsA("GuiButton") and child.Visible then
+                local ap, as = child.AbsolutePosition, child.AbsoluteSize
+                if pos.X >= ap.X and pos.X <= ap.X + as.X
+                   and pos.Y >= ap.Y and pos.Y <= ap.Y + as.Y then
+                    return
+                end
+            end
+        end
+        dragging = true
+        dragStart = input.Position
+        startPos = target.Position
     end)
     handle.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1
@@ -386,26 +398,28 @@ local function buildGui()
     local function makeTinyBtn(name, text, xOff)
         local b = Instance.new("TextButton")
         b.Name = name
-        b.Size = UDim2.new(0, 26, 0, 24)
-        b.Position = UDim2.new(1, xOff, 0, 10)
+        b.Size = UDim2.new(0, 28, 0, 26)
+        b.Position = UDim2.new(1, xOff, 0, 9)
         b.BackgroundColor3 = Theme.PanelBtn
-        b.BackgroundTransparency = 0.15
+        b.BackgroundTransparency = 0.1
         b.BorderSizePixel = 0
         b.Text = text
         b.Font = Enum.Font.GothamBold
-        b.TextSize = 14
+        b.TextSize = 15
         b.TextColor3 = Theme.Text
-        b.AutoButtonColor = false
-        b.ZIndex = 10
+        b.AutoButtonColor = true
+        b.Active = true
+        b.Selectable = true
+        b.ZIndex = 20
         b.Parent = header
         corner(b, 8)
-        stroke(b, Theme.Stroke, 1, 0.35)
+        stroke(b, Theme.Stroke, 1, 0.3)
         return b
     end
 
-    local scaleDownBtn = makeTinyBtn("ScaleDown", "<", -92)
-    local scaleUpBtn = makeTinyBtn("ScaleUp", ">", -64)
-    local minBtn = makeTinyBtn("Minimize", "—", -36)
+    local scaleDownBtn = makeTinyBtn("ScaleDown", "<", -98)
+    local scaleUpBtn = makeTinyBtn("ScaleUp", ">", -66)
+    local minBtn = makeTinyBtn("Minimize", "—", -34)
 
     -- Mode pill (PC / MOBILE) — matches photo: rounded capsule
     local modeBox = Instance.new("Frame")
@@ -615,10 +629,18 @@ local function buildGui()
         rightBtn = rightBtn,
         keyBtn = keyBtn,
         minBtn = minBtn,
+        scaleDownBtn = scaleDownBtn,
+        scaleUpBtn = scaleUpBtn,
         titleText = titleText,
         fullSize = UDim2.new(0, 352, 0, 278),
         miniSize = UDim2.new(0, 352, 0, 110),
     }
+
+    local uiScaleObj = Instance.new("UIScale")
+    uiScaleObj.Name = "MainUIScale"
+    uiScaleObj.Scale = State.uiScale or 1
+    uiScaleObj.Parent = outer
+    Refs.uiScaleObj = uiScaleObj
 
     makeDraggable(header, outer)
     makeDraggable(main, outer)
@@ -790,16 +812,32 @@ local function bindEvents()
         saveConfig()
     end)
 
-    if r.scaleDownBtn then
-        r.scaleDownBtn.MouseButton1Click:Connect(function()
-            stepUIScale(-1)
+    local function wireScale(btn, dir)
+        if not btn then return end
+        local function fire()
+            stepUIScale(dir)
+        end
+        btn.MouseButton1Click:Connect(fire)
+        btn.Activated:Connect(fire)
+        btn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                -- mark so drag on header doesn't swallow intent
+                btn:SetAttribute("_pressed", true)
+            end
+        end)
+        btn.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                if btn:GetAttribute("_pressed") then
+                    btn:SetAttribute("_pressed", false)
+                    fire()
+                end
+            end
         end)
     end
-    if r.scaleUpBtn then
-        r.scaleUpBtn.MouseButton1Click:Connect(function()
-            stepUIScale(1)
-        end)
-    end
+    wireScale(r.scaleDownBtn, -1)
+    wireScale(r.scaleUpBtn, 1)
 
     Services.UserInput.InputBegan:Connect(function(input)
         if State.listeningKey then return end
