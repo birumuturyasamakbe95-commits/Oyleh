@@ -509,19 +509,28 @@ local function buildGui()
         applyScale((State.uiScale or 1) + 0.1)
     end)
 
-    minBtn.MouseButton1Click:Connect(function()
+    -- Capture card refs later via upvalues; toggle function defined after cards exist
+    local powerCardRef, keyCardRef
+    local function toggleMinimize()
         State.isVisible = not State.isVisible
-        if Refs.powerCard then Refs.powerCard.Visible = State.isVisible end
-        if Refs.keyCard then Refs.keyCard.Visible = State.isVisible end
+        local vis = State.isVisible
+        local pc = powerCardRef or (Refs and Refs.powerCard)
+        local kc = keyCardRef or (Refs and Refs.keyCard)
+        if pc then pc.Visible = vis end
+        if kc then kc.Visible = vis end
         if outer then
-            outer.Size = State.isVisible and UDim2.new(0, 352, 0, 278) or UDim2.new(0, 352, 0, 110)
+            if vis then
+                outer.Size = UDim2.new(0, 352, 0, 278)
+            else
+                outer.Size = UDim2.new(0, 352, 0, 110)
+            end
         end
-        minBtn.Text = State.isVisible and "—" or "+"
+        minBtn.Text = vis and "—" or "+"
         pcall(saveConfig)
-    end)
-    minBtn.Activated:Connect(function()
-        -- same as click for mobile
-    end)
+        print("[SAKURA] minimized =", not vis)
+    end
+    minBtn.MouseButton1Click:Connect(toggleMinimize)
+    minBtn.Activated:Connect(toggleMinimize)
 
     ----------------------------------------------------------------
     -- POWER CARD
@@ -669,6 +678,10 @@ local function buildGui()
     corner(keyBtn, 11)
     stroke(keyBtn, Theme.Stroke, 1.05, 0.3)
 
+    -- link cards for minimize toggle
+    powerCardRef = powerCard
+    keyCardRef = keyCard
+
     Refs = {
         screenGui = screenGui,
         outer = outer,
@@ -750,10 +763,14 @@ local function refreshKey()
 end
 
 local function refreshVisibility()
-    local v = State.isVisible
+    local v = State.isVisible == true
+    State.isVisible = v
     if Refs.powerCard then Refs.powerCard.Visible = v end
     if Refs.keyCard then Refs.keyCard.Visible = v end
-    if Refs.outer then Refs.outer.Size = v and Refs.fullSize or Refs.miniSize end
+    if Refs.outer then
+        Refs.outer.Size = v and (Refs.fullSize or UDim2.new(0, 352, 0, 278))
+            or (Refs.miniSize or UDim2.new(0, 352, 0, 110))
+    end
     if Refs.minBtn then Refs.minBtn.Text = v and "—" or "+" end
 end
 
@@ -861,12 +878,6 @@ local function bindEvents()
             saveConfig()
             if conn then conn:Disconnect() end
         end)
-    end)
-
-    r.minBtn.MouseButton1Click:Connect(function()
-        State.isVisible = not State.isVisible
-        refreshVisibility()
-        saveConfig()
     end)
 
     -- scale/minimize already wired in buildGui
