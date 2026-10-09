@@ -393,34 +393,6 @@ local function buildGui()
     discordLbl.ZIndex = 8
     discordLbl.Parent = header
 
-    -- Minimize
-    -- UI scale < > and minimize —
-    local function makeTinyBtn(name, text, xOff)
-        local b = Instance.new("TextButton")
-        b.Name = name
-        b.Size = UDim2.new(0, 28, 0, 26)
-        b.Position = UDim2.new(1, xOff, 0, 9)
-        b.BackgroundColor3 = Theme.PanelBtn
-        b.BackgroundTransparency = 0.1
-        b.BorderSizePixel = 0
-        b.Text = text
-        b.Font = Enum.Font.GothamBold
-        b.TextSize = 15
-        b.TextColor3 = Theme.Text
-        b.AutoButtonColor = true
-        b.Active = true
-        b.Selectable = true
-        b.ZIndex = 20
-        b.Parent = header
-        corner(b, 8)
-        stroke(b, Theme.Stroke, 1, 0.3)
-        return b
-    end
-
-    local scaleDownBtn = makeTinyBtn("ScaleDown", "<", -98)
-    local scaleUpBtn = makeTinyBtn("ScaleUp", ">", -66)
-    local minBtn = makeTinyBtn("Minimize", "—", -34)
-
     -- Mode pill (PC / MOBILE) — matches photo: rounded capsule
     local modeBox = Instance.new("Frame")
     modeBox.Name = "ModeBox"
@@ -465,6 +437,91 @@ local function buildGui()
     mobileBtn.ZIndex = 9
     mobileBtn.Parent = modeBox
     corner(mobileBtn, 9)
+
+    ----------------------------------------------------------------
+    -- TOP CONTROLS: < > scale + minimize (NOT inside header — clickable)
+    ----------------------------------------------------------------
+    local topControls = Instance.new("Frame")
+    topControls.Name = "TopControls"
+    topControls.Size = UDim2.new(0, 100, 0, 28)
+    topControls.Position = UDim2.new(1, -108, 0, 8)
+    topControls.BackgroundTransparency = 1
+    topControls.BorderSizePixel = 0
+    topControls.ZIndex = 50
+    topControls.Parent = content
+
+    local function makeCtrlBtn(name, label, x)
+        local b = Instance.new("TextButton")
+        b.Name = name
+        b.Size = UDim2.new(0, 30, 0, 28)
+        b.Position = UDim2.new(0, x, 0, 0)
+        b.BackgroundColor3 = Color3.fromRGB(35, 35, 40)
+        b.BackgroundTransparency = 0.05
+        b.BorderSizePixel = 0
+        b.Text = label
+        b.Font = Enum.Font.GothamBold
+        b.TextSize = 16
+        b.TextColor3 = Color3.fromRGB(255, 255, 255)
+        b.AutoButtonColor = true
+        b.Active = true
+        b.Selectable = true
+        b.ZIndex = 55
+        b.Parent = topControls
+        corner(b, 8)
+        stroke(b, Color3.fromRGB(70, 70, 75), 1.2, 0.2)
+        return b
+    end
+
+    local scaleDownBtn = makeCtrlBtn("ScaleDown", "<", 0)
+    local scaleUpBtn = makeCtrlBtn("ScaleUp", ">", 34)
+    local minBtn = makeCtrlBtn("Minimize", "—", 68)
+
+    -- Wire scale + minimize IMMEDIATELY (do not wait for bindEvents)
+    local function applyScale(newScale)
+        State.uiScale = math.clamp(math.floor((newScale) * 10 + 0.5) / 10, 0.7, 1.4)
+        if Refs.uiScaleObj then
+            Refs.uiScaleObj.Scale = State.uiScale
+        elseif outer then
+            local s = outer:FindFirstChild("MainUIScale")
+            if not s then
+                s = Instance.new("UIScale")
+                s.Name = "MainUIScale"
+                s.Parent = outer
+            end
+            s.Scale = State.uiScale
+            Refs.uiScaleObj = s
+        end
+        pcall(saveConfig)
+        print("[SAKURA] UI scale =", State.uiScale)
+    end
+
+    scaleDownBtn.MouseButton1Click:Connect(function()
+        applyScale((State.uiScale or 1) - 0.1)
+    end)
+    scaleUpBtn.MouseButton1Click:Connect(function()
+        applyScale((State.uiScale or 1) + 0.1)
+    end)
+    -- Touch / Activated fallback
+    scaleDownBtn.Activated:Connect(function()
+        applyScale((State.uiScale or 1) - 0.1)
+    end)
+    scaleUpBtn.Activated:Connect(function()
+        applyScale((State.uiScale or 1) + 0.1)
+    end)
+
+    minBtn.MouseButton1Click:Connect(function()
+        State.isVisible = not State.isVisible
+        if Refs.powerCard then Refs.powerCard.Visible = State.isVisible end
+        if Refs.keyCard then Refs.keyCard.Visible = State.isVisible end
+        if outer then
+            outer.Size = State.isVisible and UDim2.new(0, 352, 0, 278) or UDim2.new(0, 352, 0, 110)
+        end
+        minBtn.Text = State.isVisible and "—" or "+"
+        pcall(saveConfig)
+    end)
+    minBtn.Activated:Connect(function()
+        -- same as click for mobile
+    end)
 
     ----------------------------------------------------------------
     -- POWER CARD
@@ -812,32 +869,7 @@ local function bindEvents()
         saveConfig()
     end)
 
-    local function wireScale(btn, dir)
-        if not btn then return end
-        local function fire()
-            stepUIScale(dir)
-        end
-        btn.MouseButton1Click:Connect(fire)
-        btn.Activated:Connect(fire)
-        btn.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch then
-                -- mark so drag on header doesn't swallow intent
-                btn:SetAttribute("_pressed", true)
-            end
-        end)
-        btn.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-                or input.UserInputType == Enum.UserInputType.Touch then
-                if btn:GetAttribute("_pressed") then
-                    btn:SetAttribute("_pressed", false)
-                    fire()
-                end
-            end
-        end)
-    end
-    wireScale(r.scaleDownBtn, -1)
-    wireScale(r.scaleUpBtn, 1)
+    -- scale/minimize already wired in buildGui
 
     Services.UserInput.InputBegan:Connect(function(input)
         if State.listeningKey then return end
