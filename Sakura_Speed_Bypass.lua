@@ -495,13 +495,8 @@ local function buildGui()
         print("[SAKURA] UI scale =", State.uiScale)
     end
 
-    scaleDownBtn.MouseButton1Click:Connect(function()
-        applyScale((State.uiScale or 1) - 0.1)
-    end)
-    scaleUpBtn.MouseButton1Click:Connect(function()
-        applyScale((State.uiScale or 1) + 0.1)
-    end)
-    -- Touch / Activated fallback
+    -- Use Activated only: connecting MouseButton1Click as well causes
+    -- the same tap to fire twice on some executors/devices.
     scaleDownBtn.Activated:Connect(function()
         applyScale((State.uiScale or 1) - 0.1)
     end)
@@ -529,7 +524,7 @@ local function buildGui()
         pcall(saveConfig)
         print("[SAKURA] minimized =", not vis)
     end
-    minBtn.MouseButton1Click:Connect(toggleMinimize)
+    -- Activated supports both mouse clicks and mobile touch without double toggling.
     minBtn.Activated:Connect(toggleMinimize)
 
     ----------------------------------------------------------------
